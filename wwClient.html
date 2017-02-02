@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-height, initial-scale=1,
+											 maximum-scale=1, user-scalable=no">
+	<style>
+		#player{
+			transform-origin: 50% 50%;
+		}
+		body{
+			color: white;
+			background-color: black;
+			font-family: sans-serif;
+			font-weight: 100;
+		}
+		#worldList, input[type="button"], select{
+			color: #00FFFF;
+			background-color: black;
+			border-color: #00FFFF;
+		}
+		#worldOptions{
+			color: #00FFFF;
+		}
+		#errorFeild, #exitButton{
+
+			color: #ff2349;
+			border-color: #ff2349;
+			font-weight: bold;
+		}
+
+		.controls{
+			font-weight: bold;
+		}
+
+		.title{
+			font-weight: bold;
+			font-size: large;
+			color: #00FFFF;
+		}
+		fieldset{
+			border-color: #00FFFF;
+		}
+	</style>
+
+	<script src="jquery-2.1.0.js"></script>
+	<script type="text/javascript">
+
+	var socket;
+	var eventSuppress = true;
+
+	function changeView(section){
+		/*Change user veiw to the specified section*/
+		switch(section){
+			case "Selection":
+				$("#Selection").show();$("#gameBoard").hide();
+				$("#titleIMG").show();$("#exit").hide();
+				eventSuppress = true;
+				break;
+			case "gameBoard":
+				$("#gameBoard").show();$("#Selection").hide();
+				$("#titleIMG").hide();$("#exit").show();
+				eventSuppress = false;
+				break;
+		}
+	}
+
+
+///////////////////////////////////////////////////////////////////////////
+//////////////////////Server Request Processing////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
+//******************************************************************************
+//********************** Event-Driven from Buttons *****************************
+
+	function checkValidInput(str){
+
+	    var patt1 = /^\w+$/;
+	    var match = str.match(patt1);
+	    if (match == null){
+	    	$("#errorFeild").html("Invalid World Name! <br> Names can Only "+
+	    									" be Alpha-Numeric (no spaces)!");
+	    	return false;
+		}
+
+	    if ($("#stageSize").val()==null || $("#numMonsters").val()==null){
+	    	$("#errorFeild").html("Please Select Feilds Before Making a World");
+	    	return false;
+		}
+
+		$("#errorFeild").html("");
+		return true;
+	}
+
+	function newWorld(){
+
+		if (checkValidInput($("#worldName").val())){
+			sendToServerDispatch( "newWorld", {world:$("#worldName").val(),
+				stageSize:$("#stageSize").val(), numMon:$("#numMonsters").val(),
+				 			followMonster:$('#followMonster').is(':checked')})
+
+		}
+	}
+
+	function enterWorld(worldName){
+
+		var playerChoice = $('input:radio[name=playerType]:checked').val();
+
+		sendToServerDispatch("enterWorld", {world:worldName, playerType:playerChoice});
+	}
+
+	function exitWorld(){
+		sendToServerDispatch("exitWorld", null);
+	}
+/*
+	Take a single step in the animation according to the player's
+	input, which can be a keyboard, tapping pictures (or swiping)
+*/
+	function movePlayer(id){
+		var dx;
+	    var dy;
+
+		if (id instanceof KeyboardEvent){
+			id = id.charCode;
+		}else{
+		    id = parseInt(id);
+		}
+
+	    switch(id){
+	        case 119://north
+	            dx = 0; dy = -1; break;
+	        case 120://south
+	        case 115:
+	            dx = 0; dy = 1; break;
+	        case 100://east
+	            dx = 1; dy = 0; break;
+	        case 97://west
+	            dx = -1; dy = 0; break;
+	        case 113://northwest
+	            dx = -1; dy = -1; break;
+	        case 101://northeast
+	            dx = 1; dy = -1; break;
+	        case 122://southwest
+	            dx = -1; dy = 1; break;
+	        case 99://southeast
+	            dx = 1; dy = 1; break;
+	    }
+
+	    if ((dx != null) && (dy != null)){
+			sendToServerDispatch("movePlayer", {newX:dx, newY:dy});
+	    }
+
+	}
+//******************************************************************************
+//********************** Event-Driven from Tablet Sensors **********************
+
+//*********************************Rotating*************************************
+	function senseRotation(){
+		if (eventSuppress) return;
+		if (window.DeviceOrientationEvent) {
+			window.addEventListener('deviceorientation', function(eventData){
+
+			var tiltLR = eventData.gamma;
+			var tiltUD = eventData.beta;
+
+			DeviceOrientationHandler(tiltLR, tiltUD);
+
+			}, false);
+
+		} else {
+			var errMsg = "Error: DeviceOrientation is supported!";
+			console.log(errMsg);
+			$("#errorFeild").html(errMsg);
+		}
+	}
+
+	function DeviceOrientationHandler(tiltLR, tiltUD){
+
+		var dx=0;
+    	var dy=0;
+
+		if (tiltLR < -10) dy = -1;
+		if (tiltLR > 10) dy = 1;
+		if (tiltUD > 10) dx = -1;
+		if (tiltUD < -10) dx = 1;
+
+
+	  	if (!(dx == 0 && dy == 0)){
+	  		setTimeout(sendToServerDispatch("moveBox", {newX:dx, newY:dy}), 0);
+	  	}
+	}
+
+//****************************Shaking*******************************************
+	function senseShake(){
+		if (eventSuppress) return;
+
+		var x = 0, y = 0, z = 0, newX = 0, newY = 0, newZ = 0;
+
+		window.addEventListener('devicemotion', function (e) {
+		    x = e.accelerationIncludingGravity.x;
+		    y = e.accelerationIncludingGravity.y;
+		    z = e.accelerationIncludingGravity.z;
+		}, false);
+
+		setInterval(function () {
+			if (eventSuppress) return;
+		    if (isShaking(x, y, z, newX, newY, newZ) ){
+			        exitWorld();
+			        eventSuppress = true;
+			}
+		    newX = x;
+		    newY = y;
+		    newZ = z;
+
+		}, 250);
+
+
+	}
+
+	function isShaking(x, y, z, newX, newY, newZ){
+			var displacement = (x-newX)+(y-newY)+(z-newZ);
+		    var distanceMoved = Math.abs(displacement);
+
+		    return distanceMoved > 10;
+	}
+
+//****************************Keypressing***************************************
+	function keypress(id){
+
+		if (!eventSuppress){
+			if ($.inArray(id.charCode, [119, 115, 120, 100, 97,
+			113, 101, 122, 99]) != -1)
+			movePlayer(id);
+		}
+	}
+//****************************Swiping*******************************************
+	var x = 0;
+	var y = 0;
+	var newX = 0;
+	var newY = 0;
+
+	function touchMove(event){
+		if (eventSuppress) return;
+		event.preventDefault();
+	}
+
+    function touchStart(event){
+    	if (eventSuppress) return;
+        x = event.changedTouches[0].pageX;
+        y = event.changedTouches[0].pageY;
+
+    }
+
+    function touchEnd(event){
+    	if (eventSuppress) return;
+        newX = event.changedTouches[0].pageX;
+        newY = event.changedTouches[0].pageY;
+
+
+        var distX = newX - x;
+        var distY = newY - y;
+
+        var dx = 0;
+        var dy = 0;
+        if (distX > 100) dx = 1;
+        if (distX < -100) dx = -1;
+        if (distY > 100) dy = 1;
+        if (distY < -100) dy = -1;
+
+        if (!(dx == 0 && dy == 0)) {
+        	sendToServerDispatch("movePlayer", {newX:dx, newY:dy});
+        }
+       	x = 0;
+		y = 0;
+		newX = 0;
+		newY = 0;
+
+    }
+
+//****************************************************************************
+
+	function sendToServerDispatch(eventName, eventData){
+	/*
+		Send eventName and EventData via JSON to Server for
+		further Processing
+	*/
+		payload = JSON.stringify({command:eventName, params:eventData});
+		socket.send(payload);
+
+	}
+
+///////////////////////////////////////////////////////////////////////////
+/////////////////////////Client Response Processing////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
+	function clientDispatch(event_name, message){
+
+		switch(event_name){
+			case "notify":
+				alert(message);
+				break;
+
+			case "setupGameBoard":
+				setupGameBoard(message);
+				break;
+
+			case "leaveGameBoard":
+				leaveGameBoard(message);
+				break;
+
+			case "draw":
+				draw(message);
+				break;
+
+			case "drawPlayer":
+				setImage(setImage("Player2", message[0], message[1]));
+				break;
+
+			case "addButton":
+				addWorld(message.worldName, message.worldCount);
+				break;
+
+			case "rmButton":
+				$("#"+message).remove();
+				$("#worldCount-"+message).remove();
+				break;
+
+			case "updateWorldCount":
+				$("#worldCount-"+ message.worldName).html("Population: "
+					+ message.worldCount);
+				break;
+		}
+	}
+
+
+
+	/*
+	  Generate a table of the stages width and height in the html
+	   document
+	*/
+	function genTable(height, width){
+	    var t='<table>'
+	    for (i = 0; i < width; i++){
+
+	        t+= '<tr>';
+
+	        for (j = 0; j < height; j++){
+	            t += '<td>';
+	            t += '<img src=' + $('#blankImage').attr("src") +' id='+
+	                j + '-'+ i + ' hieght = 20, width = 20)/>'
+	            t += '</td>';
+	        }
+	        t += '</tr>';
+	    }
+	    t +='</table>';
+
+	    $('#stage').html(t);
+	}
+
+	function setupGameBoard(message){
+		genTable(message.len, message.wid);
+		changeView("gameBoard");
+
+		$("#worldTitle").html("<p align='center'> Welcome to World: "+
+			message.worldName + "</p>");
+
+		if (eventSuppress) return;
+			// Rotation causes all boxes to move around stage
+			//with gravity effect
+			senseRotation();
+
+			senseShake();// Shake causes player to exit stage
+
+			// Swipe causes player to move in swipe direction
+			//and is handled intrinsically when Event Suppression is off
+
+	}
+
+	function leaveGameBoard(message){
+		switch(message){
+			case "win":
+				alert("YOU WON!");
+				break;
+			case "lose":
+				alert("YOU DIED!");
+				break;
+			case "exit":
+				break;
+		}
+		changeView("Selection");
+	}
+
+	function addWorld(worldName, worldCount){
+
+		var s = '<table><td><input type="button" class="enter"  value="'+worldName+'" id="'+worldName+'" onclick="enterWorld(this.value);" /></td><td> <p id="worldCount-'+worldName+'">Population:'+ worldCount+'</p></td></table>'
+
+
+		$("#worldList").append(s);
+	}
+
+
+	function draw (message) {
+
+		for (var avatar in message){
+			coords = message[avatar];
+			for(i=0;i<coords.length; i++){
+				setImage(avatar, coords[i][0], coords[i][1]);
+
+			}
+		}
+	}
+
+
+	function setImage(icon, x, y){
+
+		var icons =
+		{
+		"Player2":$("#player2Image").attr("src"),
+		"Blank":$("#blankImage").attr("src"),
+		"Monster": $("#monsterImage").attr("src"),
+		"FollowMonster": $("#followMonsterImage").attr("src"),
+		"Player": $("#playerImage").attr("src"),
+		"Slayer": $("#slayerImage").attr("src"),
+		"Wall": $("#wallImage").attr("src"),
+		"Box": $("#boxImage").attr("src")
+		};
+
+	  	$("#"+x+"-"+y).attr("src", icons[icon]);
+	}
+
+	$(function(){
+
+		window.onkeypress = keypress;
+		window.addEventListener("touchstart", touchStart, false );
+        window.addEventListener("touchmove", touchMove, false );
+        window.addEventListener("touchend", touchEnd, false );
+
+		socket = new WebSocket("ws://localhost:8000");
+		changeView("Selection");
+
+
+		socket.onopen = function (event) {
+			$('.enter').removeAttr('disabled');
+			console.log("connected");
+		};
+		socket.onclose = function (event) {
+			alert("Lost Connection With Server");
+            console.log("WebSocket Error: " , event);
+            //http://stackoverflow.com/questions/19304157/getting-the-reason-why-websockets-closed
+
+		};
+		socket.onmessage = function (message) {
+			var json = JSON.parse(message.data);
+			clientDispatch(json.command, json.params)
+			//alert("connection complete");
+		}
+
+	});
+
+	</script>
+	</head>
+	<body>
+
+	<div align="center">
+ 		<img  id="titleIMG" src="icons/title.png"  />
+ 	</div>
+<!--***************************WORLD SELECTION***************************-->
+	<section id = "Selection">
+
+		<div id="worldOptions" align="center">
+
+			<p class="title"> New World:<p>
+			<input type="text" id="worldName" placeholder="Name">
+
+			<select id="stageSize">
+				<option value="" disabled selected>Stage Size:</option>
+				<option value="10">Small</option>
+				<option value="15">Medium</option>
+				<option value="21">Large</option>
+
+			</select>
+
+			<select id ="numMonsters">
+				<option value="" disabled selected>Difficulty</option>
+				<option value="1">Easy</option>
+				<option value="3">Medium</option>
+				<option value="5">Hard</option>
+			</select>
+
+			<input  id="followMonster" type="checkbox" name="followMonster" value="followMonster"> Follow Monster?
+
+			<input type="button" value="Make World"  onclick="newWorld();" /></td><br>
+
+		</div>
+
+		<div align="center" id="errorFeild"></div>
+
+		<p class="title" align="center">Existing Worlds:<p>
+
+
+		<table align="center">
+			<td id="worldList"><td>
+			<td >
+				<form>
+					<fieldset >
+						<legend> Player Type</legend>
+						<input type="radio" name="playerType" value="Player"
+							checked="checked" >Player
+						<br>
+						<input type="radio" name="playerType" value="Slayer"> Slayer
+					</fieldset>
+				</form>
+
+			</td>
+		</table>
+
+	</section>
+<!--*************************** Game Board ***************************-->
+	<section id= "gameBoard" >
+
+		 <table align="center">
+		 	<tr>
+		 		<td>
+		 			<div class="title" id="worldTitle"></div>
+		 		</td>
+ 				<td id="exit">
+ 					<input id=exitButton type="button" value="Exit" onclick="exitWorld();" />
+ 				</td>
+ 			</tr>
+ 		</table>
+
+
+		<table align="center">
+			<tr>
+				<td>
+					<div id="stage"> </div>
+				</td>
+				<td>
+					<p class="controls" align="center">Controls:</p>
+					<table class="controls" align="center">
+						<tr>
+							<td>
+								<img src="icons/Controls/north_west.png" id="113"
+								onclick="movePlayer(this.id);" width ="100px"height="100px" />
+							</td>
+							<td align="center">
+								<img src="icons/Controls/north.png"
+								id="119" onclick="movePlayer(this.id);"width ="50px"height="100px"/>
+							</td>
+							<td>
+								<img src="icons/Controls/north_east.png" id="101"
+								onclick="movePlayer(this.id);"width ="100px"height="100px"/>
+							</td>
+						</tr>
+			<tr>
+				<td>
+					<img src="icons/Controls/west.png" id="97"
+					onclick="movePlayer(this.id);"width ="100px"height="50px" />
+				</td>
+
+				<td >
+					<img src="icons/player2.jpg" id="player2Image"
+					style="width:100%;height:100%;"width ="100px"height="100px" />
+				</td>
+
+				<td>
+					<img src="icons/Controls/east.png" id="100"
+					onclick="movePlayer(this.id);" width ="100px"height="50px"/>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<img src="icons/Controls/south_west.png" id="122"
+				 	onclick="movePlayer(this.id);"width ="100px"height="100px"/>
+				</td>
+				<td align="center">
+					<img src="icons/Controls/south.png"
+					id="120" onclick="movePlayer(this.id);"width ="50px"height="100px"/>
+				</td>
+				<td>
+					<img src="icons/Controls/south_east.png" id="99"
+					onclick="movePlayer(this.id);"width ="100px"height="100px"/>
+				</td>
+			</tr>
+		</table>
+
+
+		<table class="legend" >
+			<tr align="center" >
+				<td style="color:white">
+					Legend:
+				</td>
+			</tr>
+			<tr align="center">
+
+				<td align="center">
+					 <img src="icons/blank.png" id="blankImage" />
+				</td>
+
+				<td align="center">
+					<img src="icons/player.jpg" id="playerImage" />
+				</td>
+				<td align="center">
+					<img src="icons/slayer.jpg" id="slayerImage" />
+				</td>
+				<td align="center">
+					<img src="icons/Boxes/box.png" id="boxImage" />
+				</td>
+				<td align="center">
+					<img  src="icons/Boxes/wall.png" height = 20 width = 20 id="wallImage" />
+				</td>
+				<td align="center">
+					<img src="icons/Monsters/monster.png" id="monsterImage" />
+				</td>
+				<td align="center">
+					<img src="icons/Monsters/wind_monster.png" id="followMonsterImage" />
+				</td>
+			</tr>
+
+			<tr align="center">
+				<td align="center"style="color:white">
+					Empty <br> Square
+				</td>
+
+				<td style="color:white">
+					&nbsp;Players &nbsp;
+				</td>
+				<td style="color:white">
+					 &nbsp;Slayers &nbsp;
+				</td>
+				<td style="color:white">
+					&nbsp;&nbsp;&nbsp;&nbsp;Box&nbsp;&nbsp;&nbsp;&nbsp;
+				</td>
+				<td style="color:white">
+					&nbsp;&nbsp; Wall &nbsp;&nbsp;
+				</td>
+				<td style="color:white">
+					&nbsp;&nbsp; Monster &nbsp;&nbsp;
+				</td>
+				<td style="color:white">
+					&nbsp; Follow Monster &nbsp;
+				</td>
+			</tr>
+		</table>
+	</section>
+
+	</body>
+</html>
