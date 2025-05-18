@@ -32,8 +32,13 @@
 // Larger play field for a more interesting demo
 const SIZE = 20;
 const NUM_MONSTERS = 2;
-// 35% of open cells will contain movable boxes
-const BOX_RATIO = 0.35;
+const NUM_FOLLOW_MONSTERS = 1;
+const NUM_EARTH_MONSTERS = 1;
+const NUM_FIRE_MONSTERS = 1;
+const NUM_ICE_MONSTERS = 1;
+const NUM_WIND_MONSTERS = 1;
+// 65% of open cells will contain movable boxes for a crowded level
+const BOX_RATIO = 0.65;
 const TICK_MS = 500;
 
 class Actor {
@@ -79,6 +84,28 @@ class Monster extends Actor {
         }
     }
 }
+
+class FollowMonster extends Monster {
+    step() {
+        const dx = Math.sign(this.stage.player.x - this.x);
+        const dy = Math.sign(this.stage.player.y - this.y);
+        const nx = this.x + dx;
+        const ny = this.y + dy;
+        if (this.stage.player && nx === this.stage.player.x && ny === this.stage.player.y) {
+            alert('You were caught!');
+            window.location.reload();
+            return;
+        }
+        if (this.stage.isOpen(nx, ny)) {
+            this.stage.moveActor(this, nx, ny);
+        }
+    }
+}
+
+class EarthMonster extends Monster {}
+class FireMonster extends Monster {}
+class IceMonster extends Monster {}
+class WindMonster extends Monster {}
 
 class Box extends Actor {
     constructor(x, y, stage, movable = true) {
@@ -172,14 +199,20 @@ function init() {
         stage.addActor(new Box(0, y, stage, false));
         stage.addActor(new Box(SIZE-1, y, stage, false));
     }
-    for (let i=0;i<NUM_MONSTERS;i++) {
+    function placeMonster(MType) {
         let x,y;
         do {
             x = Math.floor(Math.random()*SIZE);
             y = Math.floor(Math.random()*SIZE);
         } while(!stage.isOpen(x,y));
-        stage.addActor(new Monster(x,y,stage));
+        stage.addActor(new MType(x,y,stage));
     }
+    for (let i=0;i<NUM_MONSTERS;i++) placeMonster(Monster);
+    for (let i=0;i<NUM_FOLLOW_MONSTERS;i++) placeMonster(FollowMonster);
+    for (let i=0;i<NUM_EARTH_MONSTERS;i++) placeMonster(EarthMonster);
+    for (let i=0;i<NUM_FIRE_MONSTERS;i++) placeMonster(FireMonster);
+    for (let i=0;i<NUM_ICE_MONSTERS;i++) placeMonster(IceMonster);
+    for (let i=0;i<NUM_WIND_MONSTERS;i++) placeMonster(WindMonster);
     const totalOpen = SIZE*SIZE - stage.actors.length;
     const numBoxes = Math.floor(totalOpen * BOX_RATIO);
     for (let i=0;i<numBoxes;i++) {
@@ -221,6 +254,11 @@ function draw(){
             const cell = stage.grid[y][x];
             const img = document.createElement('img');
             if (cell instanceof Player) img.src = 'icons/player.jpg';
+            else if (cell instanceof FollowMonster) img.src = 'icons/Monsters/follow_monster.png';
+            else if (cell instanceof EarthMonster) img.src = 'icons/Monsters/earth_monster.png';
+            else if (cell instanceof FireMonster) img.src = 'icons/Monsters/fire_monster.png';
+            else if (cell instanceof IceMonster) img.src = 'icons/Monsters/ice_monster.png';
+            else if (cell instanceof WindMonster) img.src = 'icons/Monsters/wind_monster.png';
             else if (cell instanceof Monster) img.src = 'icons/Monsters/monster.png';
             else if (cell instanceof Box) img.src = cell.movable ? 'icons/Boxes/box.png' : 'icons/Boxes/wall.png';
             else img.src = 'icons/blank.png';
