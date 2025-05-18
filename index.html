@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Warehouse Wars Single Player</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: black;
+            color: white;
+        }
+        #game { margin: auto; }
+        #game td { padding: 0; }
+        #game img { width: 20px; height: 20px; }
+        #controls img { width: 50px; height: 50px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<h1 align="center">Warehouse Wars - Single Player Demo</h1>
+<div id="stage"></div>
+<div id="controls" align="center">
+    <img src="icons/Controls/north.png" id="u">
+    <br>
+    <img src="icons/Controls/west.png" id="l">
+    <img src="icons/player2.jpg" id="playerIcon">
+    <img src="icons/Controls/east.png" id="r">
+    <br>
+    <img src="icons/Controls/south.png" id="d">
+</div>
+<script>
+const SIZE = 10;
+const NUM_MONSTERS = 2;
+const TICK_MS = 500;
+
+class Actor {
+    constructor(x, y, stage) {
+        this.x = x;
+        this.y = y;
+        this.stage = stage;
+        this.dead = false;
+    }
+    getCoords() { return [this.x, this.y]; }
+    setCoords(x, y) { this.x = x; this.y = y; }
+    step() {}
+}
+
+class Player extends Actor {
+    move(dx, dy) {
+        const nx = this.x + dx;
+        const ny = this.y + dy;
+        if (this.stage.isOpen(nx, ny)) {
+            this.stage.moveActor(this, nx, ny);
+        }
+    }
+}
+
+class Monster extends Actor {
+    step() {
+        const dx = Math.floor(Math.random()*3) - 1;
+        const dy = Math.floor(Math.random()*3) - 1;
+        const nx = this.x + dx;
+        const ny = this.y + dy;
+        if (this.stage.player && nx === this.stage.player.x && ny === this.stage.player.y) {
+            alert('You were caught!');
+            window.location.reload();
+            return;
+        }
+        if (this.stage.isOpen(nx, ny)) {
+            this.stage.moveActor(this, nx, ny);
+        }
+    }
+}
+
+class Stage {
+    constructor(size) {
+        this.size = size;
+        this.grid = [];
+        for (let y=0; y<size; y++) {
+            const row = [];
+            for (let x=0; x<size; x++) row.push(null);
+            this.grid.push(row);
+        }
+        this.player = null;
+        this.actors = [];
+    }
+    isOpen(x, y) {
+        return x>=0 && x<this.size && y>=0 && y<this.size && !this.grid[y][x];
+    }
+    addActor(actor) {
+        this.grid[actor.y][actor.x] = actor;
+        this.actors.push(actor);
+    }
+    moveActor(actor, nx, ny) {
+        this.grid[actor.y][actor.x] = null;
+        actor.setCoords(nx, ny);
+        this.grid[ny][nx] = actor;
+    }
+    step() {
+        for (const a of this.actors) {
+            if (a instanceof Monster) a.step();
+        }
+    }
+}
+
+const stage = new Stage(SIZE);
+function init() {
+    const p = new Player(Math.floor(SIZE/2), Math.floor(SIZE/2), stage);
+    stage.player = p;
+    stage.addActor(p);
+    for (let i=0;i<NUM_MONSTERS;i++) {
+        let x,y;
+        do {
+            x = Math.floor(Math.random()*SIZE);
+            y = Math.floor(Math.random()*SIZE);
+        } while(!stage.isOpen(x,y));
+        stage.addActor(new Monster(x,y,stage));
+    }
+    draw();
+    document.getElementById('u').onclick = ()=>move(0,-1);
+    document.getElementById('d').onclick = ()=>move(0,1);
+    document.getElementById('l').onclick = ()=>move(-1,0);
+    document.getElementById('r').onclick = ()=>move(1,0);
+    document.onkeydown = (e)=>{
+        switch(e.key){
+            case 'w': move(0,-1); break;
+            case 's': move(0,1); break;
+            case 'a': move(-1,0); break;
+            case 'd': move(1,0); break;
+        }
+    };
+    setInterval(()=>{ stage.step(); draw(); }, TICK_MS);
+}
+
+function move(dx, dy){
+    stage.player.move(dx, dy);
+    draw();
+}
+
+function draw(){
+    const t = document.createElement('table');
+    t.id = 'game';
+    for(let y=0;y<SIZE;y++){
+        const tr = document.createElement('tr');
+        for(let x=0;x<SIZE;x++){
+            const td = document.createElement('td');
+            const cell = stage.grid[y][x];
+            const img = document.createElement('img');
+            if (cell instanceof Player) img.src = 'icons/player.jpg';
+            else if (cell instanceof Monster) img.src = 'icons/Monsters/monster.png';
+            else img.src = 'icons/blank.png';
+            td.appendChild(img);
+            tr.appendChild(td);
+        }
+        t.appendChild(tr);
+    }
+    const stageDiv = document.getElementById('stage');
+    stageDiv.innerHTML = '';
+    stageDiv.appendChild(t);
+}
+
+init();
+</script>
+</body>
+</html>
