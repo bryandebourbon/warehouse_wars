@@ -29,8 +29,11 @@
     <img src="icons/Controls/south.png" id="d">
 </div>
 <script>
-const SIZE = 10;
+// Larger play field for a more interesting demo with box obstacles
+const SIZE = 20;
 const NUM_MONSTERS = 2;
+// Number of movable boxes placed randomly inside the border
+const NUM_BOXES = 15;
 const TICK_MS = 500;
 
 class Actor {
@@ -49,7 +52,11 @@ class Player extends Actor {
     move(dx, dy) {
         const nx = this.x + dx;
         const ny = this.y + dy;
-        if (this.stage.isOpen(nx, ny)) {
+        if (!this.stage.inBounds(nx, ny)) return;
+        const target = this.stage.getActor(nx, ny);
+        if (!target) {
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof Box && target.push(dx, dy)) {
             this.stage.moveActor(this, nx, ny);
         }
     }
@@ -72,6 +79,28 @@ class Monster extends Actor {
     }
 }
 
+class Box extends Actor {
+    constructor(x, y, stage, movable = true) {
+        super(x, y, stage);
+        this.movable = movable;
+    }
+    push(dx, dy) {
+        if (!this.movable) return false;
+        const nx = this.x + dx;
+        const ny = this.y + dy;
+        if (!this.stage.inBounds(nx, ny)) return false;
+        const target = this.stage.getActor(nx, ny);
+        if (!target) {
+            this.stage.moveActor(this, nx, ny);
+            return true;
+        } else if (target instanceof Box && target.push(dx, dy)) {
+            this.stage.moveActor(this, nx, ny);
+            return true;
+        }
+        return false;
+    }
+}
+
 class Stage {
     constructor(size) {
         this.size = size;
@@ -84,8 +113,10 @@ class Stage {
         this.player = null;
         this.actors = [];
     }
+    inBounds(x, y) { return x>=0 && x<this.size && y>=0 && y<this.size; }
+    getActor(x, y) { return this.inBounds(x,y) ? this.grid[y][x] : null; }
     isOpen(x, y) {
-        return x>=0 && x<this.size && y>=0 && y<this.size && !this.grid[y][x];
+        return this.inBounds(x, y) && !this.getActor(x, y);
     }
     addActor(actor) {
         this.grid[actor.y][actor.x] = actor;
@@ -105,16 +136,34 @@ class Stage {
 
 const stage = new Stage(SIZE);
 function init() {
+    // Place immovable boxes around the border
+    for (let x=0; x<SIZE; x++) {
+        stage.addActor(new Box(x, 0, stage, false));
+        stage.addActor(new Box(x, SIZE-1, stage, false));
+    }
+    for (let y=1; y<SIZE-1; y++) {
+        stage.addActor(new Box(0, y, stage, false));
+        stage.addActor(new Box(SIZE-1, y, stage, false));
+    }
+
     const p = new Player(Math.floor(SIZE/2), Math.floor(SIZE/2), stage);
     stage.player = p;
     stage.addActor(p);
     for (let i=0;i<NUM_MONSTERS;i++) {
         let x,y;
         do {
-            x = Math.floor(Math.random()*SIZE);
-            y = Math.floor(Math.random()*SIZE);
+            x = Math.floor(Math.random()*(SIZE-2)) + 1;
+            y = Math.floor(Math.random()*(SIZE-2)) + 1;
         } while(!stage.isOpen(x,y));
         stage.addActor(new Monster(x,y,stage));
+    }
+    for (let i=0;i<NUM_BOXES;i++) {
+        let x,y;
+        do {
+            x = Math.floor(Math.random()*(SIZE-2)) + 1;
+            y = Math.floor(Math.random()*(SIZE-2)) + 1;
+        } while(!stage.isOpen(x,y));
+        stage.addActor(new Box(x,y,stage,true));
     }
     draw();
     document.getElementById('u').onclick = ()=>move(0,-1);
@@ -148,6 +197,9 @@ function draw(){
             const img = document.createElement('img');
             if (cell instanceof Player) img.src = 'icons/player.jpg';
             else if (cell instanceof Monster) img.src = 'icons/Monsters/monster.png';
+            else if (cell instanceof Box) {
+                img.src = cell.movable ? 'icons/Boxes/box.png' : 'icons/Boxes/wall.png';
+            }
             else img.src = 'icons/blank.png';
             td.appendChild(img);
             tr.appendChild(td);
