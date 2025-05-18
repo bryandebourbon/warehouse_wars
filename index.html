@@ -29,8 +29,10 @@
     <img src="icons/Controls/south.png" id="d">
 </div>
 <script>
-const SIZE = 10;
+// Larger play field for a more interesting demo
+const SIZE = 20;
 const NUM_MONSTERS = 2;
+const NUM_BOXES = 15;
 const TICK_MS = 500;
 
 class Actor {
@@ -71,6 +73,8 @@ class Monster extends Actor {
         }
     }
 }
+
+class Box extends Actor {}
 
 class Stage {
     constructor(size) {
@@ -116,6 +120,14 @@ function init() {
         } while(!stage.isOpen(x,y));
         stage.addActor(new Monster(x,y,stage));
     }
+    for (let i=0;i<NUM_BOXES;i++) {
+        let x,y;
+        do {
+            x = Math.floor(Math.random()*SIZE);
+            y = Math.floor(Math.random()*SIZE);
+        } while(!stage.isOpen(x,y));
+        stage.addActor(new Box(x,y,stage));
+    }
     draw();
     document.getElementById('u').onclick = ()=>move(0,-1);
     document.getElementById('d').onclick = ()=>move(0,1);
@@ -148,6 +160,7 @@ function draw(){
             const img = document.createElement('img');
             if (cell instanceof Player) img.src = 'icons/player.jpg';
             else if (cell instanceof Monster) img.src = 'icons/Monsters/monster.png';
+            else if (cell instanceof Box) img.src = 'icons/Boxes/box.png';
             else img.src = 'icons/blank.png';
             td.appendChild(img);
             tr.appendChild(td);
