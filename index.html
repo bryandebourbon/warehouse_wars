@@ -54,14 +54,55 @@ class Actor {
 }
 
 class Player extends Actor {
+    constructor(x, y, stage) {
+        super(x, y, stage);
+        this.power = null;
+    }
     move(dx, dy) {
         const nx = this.x + dx;
         const ny = this.y + dy;
         const target = this.stage.grid[ny] && this.stage.grid[ny][nx];
         if (!target) {
             if (this.stage.isOpen(nx, ny)) this.stage.moveActor(this, nx, ny);
-        } else if (target instanceof Box && target.movable) {
-            if (this.stage.pushBox(target, dx, dy)) {
+        } else if (target instanceof FireBox) {
+            this.stage.removeActor(target);
+            this.power = 'fire';
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof IceBox) {
+            this.stage.removeActor(target);
+            this.power = 'ice';
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof EarthBox) {
+            this.stage.removeActor(target);
+            this.power = 'earth';
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof WindBox) {
+            this.stage.removeActor(target);
+            this.power = 'wind';
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof PowerBox) {
+            this.stage.removeActor(target);
+            this.power = 'slayer';
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof Monster && this.power) {
+            this.stage.removeActor(target);
+            const pb = this.stage.grid[ny][nx];
+            if (pb instanceof Box) this.stage.removeActor(pb);
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof Monster) {
+            alert('You were caught!');
+            window.location.reload();
+        } else if (target instanceof IceBox && this.power === 'fire') {
+            this.stage.removeActor(target);
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof Box) {
+            const force = this.power === 'earth';
+            let pushed = this.stage.pushBox(target, dx, dy, force);
+            if (pushed && this.power === 'wind') {
+                pushed = this.stage.pushBox(target, dx, dy, force);
+            }
+            if (pushed) {
+                if (this.power === 'ice') target.movable = false;
                 this.stage.moveActor(this, nx, ny);
             }
         }
@@ -75,9 +116,14 @@ class Monster extends Actor {
         const nx = this.x + dx;
         const ny = this.y + dy;
         if (this.stage.player && nx === this.stage.player.x && ny === this.stage.player.y) {
-            alert('You were caught!');
-            window.location.reload();
-            return;
+            if (this.stage.player.power) {
+                this.stage.removeActor(this);
+                return;
+            } else {
+                alert('You were caught!');
+                window.location.reload();
+                return;
+            }
         }
         if (this.stage.isOpen(nx, ny)) {
             this.stage.moveActor(this, nx, ny);
@@ -92,9 +138,14 @@ class FollowMonster extends Monster {
         const nx = this.x + dx;
         const ny = this.y + dy;
         if (this.stage.player && nx === this.stage.player.x && ny === this.stage.player.y) {
-            alert('You were caught!');
-            window.location.reload();
-            return;
+            if (this.stage.player.power) {
+                this.stage.removeActor(this);
+                return;
+            } else {
+                alert('You were caught!');
+                window.location.reload();
+                return;
+            }
         }
         if (this.stage.isOpen(nx, ny)) {
             this.stage.moveActor(this, nx, ny);
@@ -112,6 +163,25 @@ class Box extends Actor {
         super(x, y, stage);
         this.movable = movable;
     }
+}
+
+class PowerBox extends Box {
+    constructor(x, y, stage) {
+        super(x, y, stage, true);
+    }
+}
+
+class FireBox extends Box {
+    constructor(x, y, stage) { super(x, y, stage, true); }
+}
+class IceBox extends Box {
+    constructor(x, y, stage) { super(x, y, stage, true); }
+}
+class EarthBox extends Box {
+    constructor(x, y, stage) { super(x, y, stage, true); }
+}
+class WindBox extends Box {
+    constructor(x, y, stage) { super(x, y, stage, true); }
 }
 
 class Stage {
@@ -141,13 +211,14 @@ class Stage {
         actor.setCoords(nx, ny);
         this.grid[ny][nx] = actor;
     }
-    pushBox(box, dx, dy) {
+    pushBox(box, dx, dy, force = false) {
+        if (!force && !box.movable) return false;
         const nx = box.x + dx;
         const ny = box.y + dy;
         if (!this.withinBounds(nx, ny)) return false;
         const target = this.grid[ny][nx];
         if (target) {
-            if (target instanceof Box && target.movable && this.pushBox(target, dx, dy)) {
+            if (target instanceof Box && (target.movable || force) && this.pushBox(target, dx, dy, force)) {
                 this.moveActor(box, nx, ny);
                 return true;
             }
@@ -161,6 +232,17 @@ class Stage {
         actor.dead = true;
         const idx = this.actors.indexOf(actor);
         if (idx >= 0) this.actors.splice(idx, 1);
+        if (actor instanceof FireMonster) {
+            this.addActor(new FireBox(actor.x, actor.y, this));
+        } else if (actor instanceof IceMonster) {
+            this.addActor(new IceBox(actor.x, actor.y, this));
+        } else if (actor instanceof EarthMonster) {
+            this.addActor(new EarthBox(actor.x, actor.y, this));
+        } else if (actor instanceof WindMonster) {
+            this.addActor(new WindBox(actor.x, actor.y, this));
+        } else if (actor instanceof Monster) {
+            this.addActor(new PowerBox(actor.x, actor.y, this));
+        }
     }
     monsterTrapped(monster) {
         const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -253,13 +335,22 @@ function draw(){
             const td = document.createElement('td');
             const cell = stage.grid[y][x];
             const img = document.createElement('img');
-            if (cell instanceof Player) img.src = 'icons/player.jpg';
+            if (cell instanceof Player) {
+                if (cell.power === 'fire') img.src = 'icons/flames.jpg';
+                else if (cell.power) img.src = 'icons/slayer.jpg';
+                else img.src = 'icons/player.jpg';
+            }
             else if (cell instanceof FollowMonster) img.src = 'icons/Monsters/follow_monster.png';
             else if (cell instanceof EarthMonster) img.src = 'icons/Monsters/earth_monster.png';
             else if (cell instanceof FireMonster) img.src = 'icons/Monsters/fire_monster.png';
             else if (cell instanceof IceMonster) img.src = 'icons/Monsters/ice_monster.png';
             else if (cell instanceof WindMonster) img.src = 'icons/Monsters/wind_monster.png';
             else if (cell instanceof Monster) img.src = 'icons/Monsters/monster.png';
+            else if (cell instanceof FireBox) img.src = 'icons/Boxes/fire_box.png';
+            else if (cell instanceof IceBox) img.src = 'icons/Boxes/ice_box.png';
+            else if (cell instanceof EarthBox) img.src = 'icons/Boxes/earth_box.png';
+            else if (cell instanceof WindBox) img.src = 'icons/Boxes/wind_box.png';
+            else if (cell instanceof PowerBox) img.src = 'icons/Boxes/monster_disguise.png';
             else if (cell instanceof Box) img.src = cell.movable ? 'icons/Boxes/box.png' : 'icons/Boxes/wall.png';
             else img.src = 'icons/blank.png';
             td.appendChild(img);
