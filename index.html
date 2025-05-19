@@ -8,15 +8,22 @@
         html, body {
             height: 100%;
             margin: 0;
-            overflow: hidden;
             touch-action: manipulation;
         }
         body {
             display: flex;
             flex-direction: column;
+            min-height: 100vh;
+            overflow: hidden;
             font-family: sans-serif;
             background: black;
             color: white;
+        }
+        h1 {
+            margin: 0;
+            padding: 10px 0;
+            text-align: center;
+            flex-shrink: 0;
         }
         #stage {
             flex: 1;
@@ -28,7 +35,11 @@
         #game { margin: auto; transform-origin: top left; }
         #game td { padding: 0; }
         #game img { width: 20px; height: 20px; }
-        #controls { text-align: center; padding: 10px 0; }
+        #controls {
+            text-align: center;
+            padding: 10px 0;
+            flex-shrink: 0;
+        }
         #controls img { width: 50px; height: 50px; cursor: pointer; }
     </style>
 </head>
