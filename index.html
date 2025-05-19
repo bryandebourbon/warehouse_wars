@@ -2,17 +2,33 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Warehouse Wars Single Player</title>
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
         body {
+            display: flex;
+            flex-direction: column;
             font-family: sans-serif;
             background: black;
             color: white;
         }
-        #game { margin: auto; }
+        #stage {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        #game { margin: auto; transform-origin: top left; }
         #game td { padding: 0; }
         #game img { width: 20px; height: 20px; }
+        #controls { text-align: center; padding: 10px 0; }
         #controls img { width: 50px; height: 50px; cursor: pointer; }
     </style>
 </head>
@@ -322,13 +338,23 @@ function init() {
     document.getElementById('r').onclick = ()=>move(1,0);
     document.onkeydown = (e)=>{
         switch(e.key){
-            case 'w': move(0,-1); break;
-            case 's': move(0,1); break;
-            case 'a': move(-1,0); break;
-            case 'd': move(1,0); break;
+            case 'w':
+            case 'ArrowUp':
+                move(0,-1); break;
+            case 's':
+            case 'ArrowDown':
+                move(0,1); break;
+            case 'a':
+            case 'ArrowLeft':
+                move(-1,0); break;
+            case 'd':
+            case 'ArrowRight':
+                move(1,0); break;
         }
     };
     setInterval(()=>{ stage.step(); draw(); }, TICK_MS);
+    updateScale();
+    window.addEventListener('resize', updateScale);
 }
 
 function move(dx, dy){
@@ -368,6 +394,20 @@ function draw(){
     const stageDiv = document.getElementById('stage');
     stageDiv.innerHTML = '';
     stageDiv.appendChild(t);
+    updateScale();
+}
+
+function updateScale() {
+    const table = document.getElementById('game');
+    const container = document.getElementById('stage');
+    if (!table || !container) return;
+    const cell = 20;
+    const boardW = SIZE * cell;
+    const boardH = SIZE * cell;
+    const scaleX = container.clientWidth / boardW;
+    const scaleY = container.clientHeight / boardH;
+    const scale = Math.min(scaleX, scaleY);
+    table.style.transform = `scale(${scale})`;
 }
 
 init();
