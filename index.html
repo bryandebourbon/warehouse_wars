@@ -2,15 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Warehouse Wars Single Player</title>
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
         body {
             font-family: sans-serif;
             background: black;
             color: white;
         }
-        #game { margin: auto; }
+        #stage {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+        #game { margin: auto; transform-origin: top left; }
         #game td { padding: 0; }
         #game img { width: 20px; height: 20px; }
         #controls img { width: 50px; height: 50px; cursor: pointer; }
@@ -368,9 +380,24 @@ function draw(){
     const stageDiv = document.getElementById('stage');
     stageDiv.innerHTML = '';
     stageDiv.appendChild(t);
+    updateScale();
+}
+
+function updateScale(){
+    const game = document.getElementById('game');
+    if(!game) return;
+    const controls = document.getElementById('controls');
+    const header = document.querySelector('h1');
+    const controlsHeight = controls ? controls.offsetHeight : 0;
+    const headerHeight = header ? header.offsetHeight : 0;
+    const availHeight = window.innerHeight - controlsHeight - headerHeight;
+    const scale = Math.min(window.innerWidth / game.offsetWidth,
+                           availHeight / game.offsetHeight);
+    game.style.transform = 'scale(' + scale + ')';
 }
 
 init();
+window.addEventListener('resize', updateScale);
 </script>
 </body>
 </html>
