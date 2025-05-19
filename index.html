@@ -54,12 +54,31 @@ class Actor {
 }
 
 class Player extends Actor {
+    constructor(x, y, stage) {
+        super(x, y, stage);
+        this.powered = false;
+    }
     move(dx, dy) {
         const nx = this.x + dx;
         const ny = this.y + dy;
         const target = this.stage.grid[ny] && this.stage.grid[ny][nx];
         if (!target) {
             if (this.stage.isOpen(nx, ny)) this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof FireBox || target instanceof LavaBox) {
+            alert('You burned!');
+            window.location.reload();
+        } else if (target instanceof PowerBox) {
+            this.stage.removeActor(target);
+            this.powered = true;
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof Monster && this.powered) {
+            this.stage.removeActor(target);
+            const pb = this.stage.grid[ny][nx];
+            if (pb instanceof PowerBox) this.stage.removeActor(pb);
+            this.stage.moveActor(this, nx, ny);
+        } else if (target instanceof Monster) {
+            alert('You were caught!');
+            window.location.reload();
         } else if (target instanceof Box && target.movable) {
             if (this.stage.pushBox(target, dx, dy)) {
                 this.stage.moveActor(this, nx, ny);
@@ -75,8 +94,18 @@ class Monster extends Actor {
         const nx = this.x + dx;
         const ny = this.y + dy;
         if (this.stage.player && nx === this.stage.player.x && ny === this.stage.player.y) {
-            alert('You were caught!');
-            window.location.reload();
+            if (this.stage.player.powered) {
+                this.stage.removeActor(this);
+                return;
+            } else {
+                alert('You were caught!');
+                window.location.reload();
+                return;
+            }
+        }
+        const target = this.stage.grid[ny] && this.stage.grid[ny][nx];
+        if (target instanceof FireBox || target instanceof LavaBox) {
+            this.stage.removeActor(this);
             return;
         }
         if (this.stage.isOpen(nx, ny)) {
@@ -92,8 +121,18 @@ class FollowMonster extends Monster {
         const nx = this.x + dx;
         const ny = this.y + dy;
         if (this.stage.player && nx === this.stage.player.x && ny === this.stage.player.y) {
-            alert('You were caught!');
-            window.location.reload();
+            if (this.stage.player.powered) {
+                this.stage.removeActor(this);
+                return;
+            } else {
+                alert('You were caught!');
+                window.location.reload();
+                return;
+            }
+        }
+        const target = this.stage.grid[ny] && this.stage.grid[ny][nx];
+        if (target instanceof FireBox || target instanceof LavaBox) {
+            this.stage.removeActor(this);
             return;
         }
         if (this.stage.isOpen(nx, ny)) {
@@ -111,6 +150,24 @@ class Box extends Actor {
     constructor(x, y, stage, movable = true) {
         super(x, y, stage);
         this.movable = movable;
+    }
+}
+
+class PowerBox extends Box {
+    constructor(x, y, stage) {
+        super(x, y, stage, true);
+    }
+}
+
+class FireBox extends Box {
+    constructor(x, y, stage) {
+        super(x, y, stage, false);
+    }
+}
+
+class LavaBox extends Box {
+    constructor(x, y, stage) {
+        super(x, y, stage, false);
     }
 }
 
@@ -146,6 +203,12 @@ class Stage {
         const ny = box.y + dy;
         if (!this.withinBounds(nx, ny)) return false;
         const target = this.grid[ny][nx];
+        if (target instanceof FireBox || target instanceof LavaBox) {
+            const x = box.x, y = box.y;
+            this.removeActor(box);
+            this.addActor(new LavaBox(x, y, this));
+            return true;
+        }
         if (target) {
             if (target instanceof Box && target.movable && this.pushBox(target, dx, dy)) {
                 this.moveActor(box, nx, ny);
@@ -161,6 +224,10 @@ class Stage {
         actor.dead = true;
         const idx = this.actors.indexOf(actor);
         if (idx >= 0) this.actors.splice(idx, 1);
+        if (actor instanceof Monster) {
+            const pb = new PowerBox(actor.x, actor.y, this);
+            this.addActor(pb);
+        }
     }
     monsterTrapped(monster) {
         const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -253,13 +320,16 @@ function draw(){
             const td = document.createElement('td');
             const cell = stage.grid[y][x];
             const img = document.createElement('img');
-            if (cell instanceof Player) img.src = 'icons/player.jpg';
+            if (cell instanceof Player) img.src = cell.powered ? 'icons/slayer.jpg' : 'icons/player.jpg';
             else if (cell instanceof FollowMonster) img.src = 'icons/Monsters/follow_monster.png';
             else if (cell instanceof EarthMonster) img.src = 'icons/Monsters/earth_monster.png';
             else if (cell instanceof FireMonster) img.src = 'icons/Monsters/fire_monster.png';
             else if (cell instanceof IceMonster) img.src = 'icons/Monsters/ice_monster.png';
             else if (cell instanceof WindMonster) img.src = 'icons/Monsters/wind_monster.png';
             else if (cell instanceof Monster) img.src = 'icons/Monsters/monster.png';
+            else if (cell instanceof PowerBox) img.src = 'icons/Boxes/monster_disguise.png';
+            else if (cell instanceof FireBox) img.src = 'icons/Boxes/fire_box.png';
+            else if (cell instanceof LavaBox) img.src = 'icons/Boxes/lava.png';
             else if (cell instanceof Box) img.src = cell.movable ? 'icons/Boxes/box.png' : 'icons/Boxes/wall.png';
             else img.src = 'icons/blank.png';
             td.appendChild(img);
