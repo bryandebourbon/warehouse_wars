@@ -69,7 +69,15 @@ class Player extends Actor {
 }
 
 class Monster extends Actor {
+    constructor(x, y, stage) {
+        super(x, y, stage);
+        this.frozen = 0;
+    }
     step() {
+        if (this.frozen > 0) {
+            this.frozen--;
+            return;
+        }
         const dx = Math.floor(Math.random()*3) - 1;
         const dy = Math.floor(Math.random()*3) - 1;
         const nx = this.x + dx;
@@ -114,6 +122,23 @@ class Box extends Actor {
     }
 }
 
+class EarthBox extends Box {
+    constructor(x, y, stage) { super(x, y, stage, false); }
+}
+
+class FireBox extends Box {
+    constructor(x, y, stage, lavaTicks = 0) {
+        super(x, y, stage, false);
+        this.lavaTicks = lavaTicks;
+    }
+}
+
+class IceBox extends Box {
+    constructor(x, y, stage) { super(x, y, stage, true); }
+}
+
+class WindBox extends Box {}
+
 class Stage {
     constructor(size) {
         this.size = size;
@@ -125,6 +150,7 @@ class Stage {
         }
         this.player = null;
         this.actors = [];
+        this.iceBox = null;
     }
     withinBounds(x, y) {
         return x >= 0 && x < this.size && y >= 0 && y < this.size;
@@ -147,11 +173,20 @@ class Stage {
         if (!this.withinBounds(nx, ny)) return false;
         const target = this.grid[ny][nx];
         if (target) {
-            if (target instanceof Box && target.movable && this.pushBox(target, dx, dy)) {
+            if (target instanceof FireBox && box instanceof IceBox) {
+                this.removeActor(target); // ice puts out fire
+            } else if (target instanceof FireBox) {
+                // box burns and becomes a lava fire box
+                const lava = new FireBox(box.x, box.y, this, 3);
+                this.removeActor(box);
+                this.addActor(lava);
+                return false;
+            } else if (target instanceof Box && target.movable && this.pushBox(target, dx, dy)) {
                 this.moveActor(box, nx, ny);
                 return true;
+            } else {
+                return false;
             }
-            return false;
         }
         this.moveActor(box, nx, ny);
         return true;
@@ -173,13 +208,70 @@ class Stage {
         }
         return true;
     }
+    transformMonster(monster) {
+        let box;
+        if (monster instanceof EarthMonster) box = new EarthBox(monster.x, monster.y, this);
+        else if (monster instanceof FireMonster) box = new FireBox(monster.x, monster.y, this);
+        else if (monster instanceof IceMonster) {
+            box = new IceBox(monster.x, monster.y, this);
+            this.iceBox = box;
+        } else if (monster instanceof WindMonster) box = new WindBox(monster.x, monster.y, this);
+        else box = new Box(monster.x, monster.y, this, true);
+        this.removeActor(monster);
+        this.addActor(box);
+    }
+    handleSpecialEffects() {
+        const fireBoxes = this.actors.filter(a=>a instanceof FireBox);
+        for (const fire of fireBoxes) {
+            const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+            for (const [dx,dy] of dirs) {
+                const nx = fire.x + dx;
+                const ny = fire.y + dy;
+                if (!this.withinBounds(nx, ny)) continue;
+                const actor = this.grid[ny][nx];
+                if (!actor) continue;
+                if (actor instanceof Player) {
+                    alert('You burned!');
+                    window.location.reload();
+                    return;
+                }
+                if (actor instanceof Box || actor instanceof Monster) {
+                    this.removeActor(actor);
+                    const lava = new FireBox(nx, ny, this, 3);
+                    this.addActor(lava);
+                }
+            }
+        }
+        if (this.iceBox) {
+            const ice = this.iceBox;
+            const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+            for (const [dx,dy] of dirs) {
+                const nx = ice.x + dx;
+                const ny = ice.y + dy;
+                if (!this.withinBounds(nx, ny)) continue;
+                const actor = this.grid[ny][nx];
+                if (actor instanceof FireBox) {
+                    this.removeActor(actor);
+                }
+                if (actor instanceof Monster) {
+                    actor.frozen = 3;
+                }
+            }
+        }
+    }
     step() {
         for (const a of this.actors) {
             if (a instanceof Monster) a.step();
         }
         for (const a of [...this.actors]) {
             if (a instanceof Monster && this.monsterTrapped(a)) {
-                this.removeActor(a);
+                this.transformMonster(a);
+            }
+        }
+        this.handleSpecialEffects();
+        for (const a of this.actors) {
+            if (a instanceof FireBox && a.lavaTicks > 0) {
+                a.lavaTicks--;
             }
         }
     }
@@ -260,6 +352,12 @@ function draw(){
             else if (cell instanceof IceMonster) img.src = 'icons/Monsters/ice_monster.png';
             else if (cell instanceof WindMonster) img.src = 'icons/Monsters/wind_monster.png';
             else if (cell instanceof Monster) img.src = 'icons/Monsters/monster.png';
+            else if (cell instanceof EarthBox) img.src = 'icons/Boxes/earth_box.png';
+            else if (cell instanceof FireBox) {
+                img.src = cell.lavaTicks > 0 ? 'icons/Boxes/lava.png' : 'icons/Boxes/fire_box.png';
+            }
+            else if (cell instanceof IceBox) img.src = 'icons/Boxes/ice_box.png';
+            else if (cell instanceof WindBox) img.src = 'icons/Boxes/wind_box.png';
             else if (cell instanceof Box) img.src = cell.movable ? 'icons/Boxes/box.png' : 'icons/Boxes/wall.png';
             else img.src = 'icons/blank.png';
             td.appendChild(img);
