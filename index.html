@@ -2,15 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Warehouse Wars Single Player</title>
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
         body {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
             font-family: sans-serif;
             background: black;
             color: white;
         }
-        #game { margin: auto; }
+        #stage {
+            flex: 1 1 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #game { margin: auto; transform-origin: top left; }
         #game td { padding: 0; }
         #game img { width: 20px; height: 20px; }
         #controls img { width: 50px; height: 50px; cursor: pointer; }
@@ -316,19 +331,28 @@ function init() {
         stage.addActor(new Box(x,y,stage,true));
     }
     draw();
+    updateScale();
     document.getElementById('u').onclick = ()=>move(0,-1);
     document.getElementById('d').onclick = ()=>move(0,1);
     document.getElementById('l').onclick = ()=>move(-1,0);
     document.getElementById('r').onclick = ()=>move(1,0);
     document.onkeydown = (e)=>{
         switch(e.key){
-            case 'w': move(0,-1); break;
-            case 's': move(0,1); break;
-            case 'a': move(-1,0); break;
-            case 'd': move(1,0); break;
+            case 'w':
+            case 'ArrowUp':
+                move(0,-1); break;
+            case 's':
+            case 'ArrowDown':
+                move(0,1); break;
+            case 'a':
+            case 'ArrowLeft':
+                move(-1,0); break;
+            case 'd':
+            case 'ArrowRight':
+                move(1,0); break;
         }
     };
-    setInterval(()=>{ stage.step(); draw(); }, TICK_MS);
+    setInterval(()=>{ stage.step(); draw(); updateScale(); }, TICK_MS);
 }
 
 function move(dx, dy){
@@ -369,6 +393,20 @@ function draw(){
     stageDiv.innerHTML = '';
     stageDiv.appendChild(t);
 }
+
+function updateScale(){
+    const table = document.getElementById('game');
+    if(!table) return;
+    const controls = document.getElementById('controls');
+    const title = document.querySelector('h1');
+    const boardSize = SIZE * 20;
+    const availWidth = window.innerWidth;
+    const availHeight = window.innerHeight - controls.offsetHeight - title.offsetHeight;
+    const scale = Math.min(availWidth, availHeight) / boardSize;
+    table.style.transform = `scale(${scale})`;
+}
+
+window.addEventListener('resize', updateScale);
 
 init();
 </script>
